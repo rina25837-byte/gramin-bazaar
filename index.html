@@ -1,0 +1,381 @@
+          <div style={{width:10,height:10,borderRadius:"50%",background:p.stock?C.green:C.red}}/>
+          <span style={{fontSize:13,fontWeight:700,color:p.stock?C.green:C.red}}>{p.stock?"âœ… à¤‰à¤ªà¤²à¤¬à¥à¤§ à¤¹à¥ˆ":"âŒ à¤¸à¥à¤Ÿà¥‰à¤• à¤–à¤¤à¥à¤®"}</span>
+        </div>
+        {p.desc&&<div style={{...S.card,marginBottom:12}}><div style={{fontSize:14,fontWeight:800,color:C.earth,marginBottom:6}}>ðŸ“ à¤µà¤¿à¤µà¤°à¤£</div><div style={{fontSize:13,color:"#444",lineHeight:1.7}}>{p.desc}</div></div>}
+        {Object.keys(p.details||{}).length>0&&(
+          <div style={{...S.card,marginBottom:16}}>
+            <div style={{fontSize:14,fontWeight:800,color:C.earth,marginBottom:8}}>ðŸ“‹ à¤ªà¥à¤°à¥‹à¤¡à¤•à¥à¤Ÿ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€</div>
+            {Object.entries(p.details).map(([k,v])=>(
+              <div key={k} style={{display:"flex",justifyContent:"space-between",padding:"7px 0",borderBottom:"1px solid #f0ebe3"}}>
+                <span style={{fontSize:13,color:C.gray}}>{k}</span>
+                <span style={{fontSize:13,color:C.earth,fontWeight:600}}>{v}</span>
+              </div>
+            ))}
+          </div>
+        )}
+        {cart[p.id]?(
+          <div style={{display:"flex",alignItems:"center",justifyContent:"center",gap:16,background:C.gp,borderRadius:12,padding:"14px",marginBottom:10}}>
+            <button style={{...S.qBtn,width:42,height:42,fontSize:22}} onClick={()=>updQty(p.id,-1)}>âˆ’</button>
+            <input type="number" inputMode="numeric" value={cart[p.id]} onChange={e=>setQty(p.id,e.target.value)} style={{fontWeight:900,fontSize:24,color:C.green,width:70,textAlign:"center",border:`1.5px solid ${C.green}`,borderRadius:8,padding:"4px 0",background:C.white}}/>
+            <button style={{...S.qBtn,width:42,height:42,fontSize:22}} onClick={()=>updQty(p.id,1)}>+</button>
+          </div>
+        ):<button disabled={!p.stock} style={{...S.btn(!p.stock?"gray":p.category==="RCM"?"rcm":"primary"),marginBottom:10}} onClick={()=>{if(p.stock)addToCart(p);}}>{!p.stock?"âŒ à¤¸à¥à¤Ÿà¥‰à¤• à¤¨à¤¹à¥€à¤‚":"ðŸ›’ à¤•à¤¾à¤°à¥à¤Ÿ à¤®à¥‡à¤‚ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚"}</button>}
+        <button style={S.btn("gray")} onClick={onBack}>â† à¤µà¤¾à¤ªà¤¸ à¤œà¤¾à¤à¤‚</button>
+        <div style={{height:8}}/>
+        <button style={{...S.btn("wa"),fontSize:13}} onClick={()=>shareProd(p)}>ðŸ“² à¤¯à¤¹ à¤¸à¤¾à¤®à¤¾à¤¨ WhatsApp à¤ªà¤° share à¤•à¤°à¥‡à¤‚</button>
+      </div>
+      {cartCount>0&&<div style={{position:"fixed",bottom:20,left:"50%",transform:"translateX(-50%)",background:C.green,color:C.white,borderRadius:30,padding:"13px 26px",fontWeight:800,fontSize:15,boxShadow:"0 4px 20px rgba(0,0,0,0.25)",cursor:"pointer",zIndex:500,whiteSpace:"nowrap"}} onClick={()=>{onBack();setScreen("cart");}}>ðŸ›’ à¤•à¤¾à¤°à¥à¤Ÿ ({cartCount}) â€¢ â‚¹{cartTotal}</div>}
+    </div>
+  );
+}
+
+function App() {
+  const [products, setProductsRaw] = useState([]);
+  const [orders, setOrdersRaw] = useState([]);
+  const [loaded, setLoaded] = useState(false);
+  // Simple Registration â€” Firebase Auth à¤¨à¤¹à¥€à¤‚, à¤¸à¤¿à¤°à¥à¤« localStorage
+  const [registered, setRegistered] = useState(()=>!!localStorage.getItem("gb_registered"));
+  const [regForm, setRegForm] = useState({ownerName:"", shopName:"", address:"", pincode:"", mobile:""});
+  const [screen, setScreen] = useState("home");
+  const [cart, setCart] = useState({});
+  const [cat, setCat] = useState("à¤¸à¤­à¥€");
+  const [search, setSearch] = useState("");
+  const [shopName, setShopName] = useState(()=>localStorage.getItem("gb_shop_name")||"à¤†à¤ªà¤•à¥€ à¤¦à¥à¤•à¤¾à¤¨");
+  const [shopPhone, setShopPhone] = useState(()=>localStorage.getItem("gb_shop_phone")||"");
+  const [shopAddr, setShopAddr] = useState(()=>localStorage.getItem("gb_shop_addr")||"");
+  const [shopDistance, setShopDistance] = useState(()=>localStorage.getItem("gb_shop_distance")||"");
+  const [selProd, setSelProd] = useState(null);
+  const [placedOrder, setPlacedOrder] = useState(null);
+  const [notif, setNotif] = useState(null);
+  const [adminMode, setAdminMode] = useState(false);
+  const [adminPin, setAdminPin] = useState("");
+  const [showPin, setShowPin] = useState(false);
+  const [showShop, setShowShop] = useState(false);
+  const [editProd, setEditProd] = useState(null);
+  const [showAdd, setShowAdd] = useState(false);
+  const [adminTab, setAdminTab] = useState("products");
+  const [newF, setNewF] = useState({name:"",brand:"",unit:"",price:"",mrp:"",category:"à¤¸à¥à¤¨à¥ˆà¤•à¥à¤¸",desc:"",img:"",tag:"new",stockQty:""});
+  const [invoiceOrder, setInvoiceOrder] = useState(null);
+  const [showPayment, setShowPayment] = useState(false);
+  const addRef = useRef(); const addRef2 = useRef(); const addRef3 = useRef();
+  const editRef = useRef(); const editRef2 = useRef(); const editRef3 = useRef();
+  const logoTapsRef = useRef({count:0, t:0});
+
+  // ðŸŒ¿ Logo à¤ªà¤° 10 à¤¬à¤¾à¤° à¤œà¤²à¥à¤¦à¥€ tap à¤•à¤°à¤¨à¥‡ à¤¸à¥‡ Admin PIN à¤–à¥à¤²à¥‡à¤—à¤¾
+  const handleLogoTap = () => {
+    const now = Date.now();
+    const ref = logoTapsRef.current;
+    if(now - ref.t > 3000) ref.count = 0;
+    ref.count += 1; ref.t = now;
+    if(ref.count >= 10) { ref.count = 0; setShowPin(true); }
+  };
+
+  useEffect(() => {
+    // ðŸ” URL à¤¸à¥‡ Admin access â€” ?admin=2532008 à¤²à¤—à¤¾à¤¨à¥‡ à¤ªà¤° à¤¸à¥€à¤§à¥‡ Admin Panel à¤–à¥à¤²à¥‡à¤—à¤¾
+    const urlParams = new URLSearchParams(window.location.search);
+    if(urlParams.get("admin") === ADMIN_PIN) {
+      setAdminMode(true);
+      setScreen("admin");
+      // URL clean à¤•à¤°à¥‹ à¤¤à¤¾à¤•à¤¿ à¤¦à¥‚à¤¸à¤°à¥‹à¤‚ à¤•à¥‹ à¤¨ à¤¦à¤¿à¤–à¥‡
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+
+    // ðŸ“¦ Products â€” Firestore à¤¸à¥‡ real-time sync
+    const unsubProducts = db.collection("products").onSnapshot(snap => {
+      if(snap.empty){
+        const batch = db.batch();
+        DEFAULT_PRODUCTS.forEach(p => batch.set(db.collection("products").doc(String(p.id)), p));
+        batch.commit().catch(()=>{});
+        setProductsRaw(DEFAULT_PRODUCTS);
+      } else {
+        setProductsRaw(snap.docs.map(d=>d.data()));
+      }
+      setLoaded(true);
+    }, () => { setProductsRaw(DEFAULT_PRODUCTS); setLoaded(true); toast("âš ï¸ Offline mode â€” à¤ªà¥à¤°à¤¾à¤¨à¤¾ data à¤¦à¤¿à¤– à¤°à¤¹à¤¾ à¤¹à¥ˆ",C.saffron); });
+
+    // ðŸ“‹ Orders â€” Firestore à¤¸à¥‡ real-time sync
+    const unsubOrders = db.collection("orders").orderBy("createdAt","desc").onSnapshot(snap => {
+      setOrdersRaw(snap.docs.map(d=>d.data()));
+    }, ()=>{});
+
+    return () => { unsubProducts(); unsubOrders(); };
+  }, []);
+
+  // Admin lock
+  const lockAdmin = () => { setAdminMode(false); setScreen("home"); toast("ðŸ”’ Admin Lock à¤¹à¥‹ à¤—à¤¯à¤¾"); };
+
+  // ðŸ“² à¤à¤ª share à¤•à¤°à¥‹
+  const shareApp = () => {
+    const msg = `ðŸŒ¿ *à¤—à¥à¤°à¤¾à¤®à¥€à¤£ à¤¬à¤¾à¤œà¤¼à¤¾à¤°*\n\nà¤­à¤¾à¤ˆ, à¤…à¤¬ à¤˜à¤° à¤¬à¥ˆà¤ à¥‡ à¤¸à¤¾à¤®à¤¾à¤¨ order à¤•à¤°à¥‹!\nâœ… à¤•à¤¿à¤°à¤¾à¤¨à¤¾, à¤¤à¥‡à¤², à¤®à¤¸à¤¾à¤²à¥‡, à¤¬à¤¿à¤¸à¥à¤•à¥à¤Ÿ à¤¸à¤¬ à¤•à¥à¤›\nðŸšš à¤¡à¤¿à¤²à¥€à¤µà¤°à¥€ à¤†à¤ªà¤•à¥‡ à¤¦à¤°à¤µà¤¾à¤œà¥‡ à¤ªà¤°\nðŸ’³ COD à¤”à¤° UPI à¤¦à¥‹à¤¨à¥‹à¤‚\n\nðŸ‘‡ à¤…à¤­à¥€ download à¤•à¤°à¥‹:\n${APP_LINK}`;
+    if(navigator.share) {
+      navigator.share({ title:"à¤—à¥à¤°à¤¾à¤®à¥€à¤£ à¤¬à¤¾à¤œà¤¼à¤¾à¤°", text:msg, url:APP_LINK })
+        .catch(()=>{});
+    } else {["ðŸ’¬","WA","à¤•à¤¨à¥à¤«à¤°à¥à¤®"]].map(([ic,v,l],i)=>(
+                <div key={i} style={{...S.card,flex:1,textAlign:"center",padding:"10px 6px",marginBottom:0}}><div style={{fontSize:20}}>{ic}</div><div style={{fontSize:13,fontWeight:800,color:C.green}}>{v}</div><div style={{fontSize:10,color:C.gray}}>{l}</div></div>
+              ))}
+            </div>
+            <div style={{fontSize:15,fontWeight:800,color:C.earth,marginBottom:10}}>ðŸ”¥ Best Sellers</div>
+            <div style={{display:"flex",gap:10,overflowX:"auto",paddingBottom:6,marginBottom:14}}>
+              {products.filter(p=>p.tag==="bestseller"&&p.stock).slice(0,8).map(p=>(
+                <div key={p.id} style={{flexShrink:0,width:88,cursor:"pointer"}} onClick={()=>setSelProd(p)}>
+                  <div style={{height:80,borderRadius:10,overflow:"hidden"}}><ProdImg p={p} w={88} h={80}/></div>
+                  <div style={{fontSize:10,fontWeight:700,color:C.earth,lineHeight:1.3,textAlign:"center",marginTop:3}}>{p.name.split(" ").slice(0,2).join(" ")}</div>
+                  <div style={{fontSize:11,fontWeight:800,color:C.green,textAlign:"center"}}>â‚¹{p.price}</div>
+                </div>
+              ))}
+            </div>
+            <div style={{background:`linear-gradient(135deg,${C.rcm},#3949AB)`,borderRadius:14,padding:"14px 16px",marginBottom:14,color:C.white}}>
+              <div style={{fontSize:13,fontWeight:800,marginBottom:4}}>ðŸŒŸ RCM Direct Products</div>
+              <div style={{fontSize:12,opacity:0.9}}>Atta, Tea, Oil, Vitamins â€” DP à¤ªà¥à¤°à¤¾à¤‡à¤¸ à¤ªà¤°à¥¤</div>
+              <button style={{marginTop:8,background:"rgba(255,255,255,0.2)",border:"1px solid rgba(255,255,255,0.4)",color:C.white,borderRadius:8,padding:"6px 14px",fontSize:12,fontWeight:700,cursor:"pointer"}} onClick={()=>{setCat("RCM");setScreen("catalog");}}>RCM à¤‘à¤°à¥à¤¡à¤° à¤•à¤°à¥‡à¤‚ â†’</button>
+            </div>
+            {(() => {
+              const myOrders = orders.filter(o=>o.phone===shopPhone);
+              if(myOrders.length===0) return null;
+              const o0 = myOrders[0];
+              return (
+                <div style={{...S.card,border:`2px solid ${C.gp}`,cursor:"pointer",marginBottom:10}} onClick={()=>setScreen("orders")}>
+                  <div style={{display:"flex",justifyContent:"space-between"}}>
+                    <div><div style={{fontWeight:700,color:C.earth}}>#{o0.id}</div><div style={{fontSize:11,color:C.gray}}>{o0.date}</div></div>
+                    <div style={{textAlign:"right"}}><span style={S.tag("popular")}>{ORDER_STATUSES[statusIndex(o0.status)].icon} {ORDER_STATUSES[statusIndex(o0.status)].label}</span><div style={{fontWeight:800,color:C.green}}>â‚¹{o0.total}</div></div>
+                  </div>
+                </div>
+              );
+            })()}
+            {(() => {
+              const myDue = orders.filter(o=>o.phone===shopPhone && o.paymentStatus!=="paid").reduce((s,o)=>s+(o.total||0)+(o.deliveryFee||0),0);
+              if(!shopPhone || myDue<=0) return null;
+              return (
+                <div style={{...S.card,background:"#FFF3E0",border:`2px solid ${C.saffron}`,marginBottom:10,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                  <div><div style={{fontSize:12,color:C.gray}}>ðŸ’° à¤†à¤ªà¤•à¤¾ à¤¬à¤•à¤¾à¤¯à¤¾ (à¤‰à¤§à¤¾à¤°)</div><div style={{fontSize:20,fontWeight:900,color:C.saffron}}>â‚¹{myDue}</div></div>
+                  <div style={{fontSize:28}}>ðŸ“’</div>
+                </div>
+              );
+            })()}
+            <button style={S.btn("primary")} onClick={()=>setScreen("catalog")}>ðŸ›’ à¤¸à¤¾à¤®à¤¾à¤¨ à¤‘à¤°à¥à¤¡à¤° à¤•à¤°à¥‡à¤‚</button>
+            <div style={{height:8}}/>
+            <button style={{...S.btn("wa"),fontSize:14}} onClick={shareApp}>ðŸ“² à¤¦à¥‹à¤¸à¥à¤¤à¥‹à¤‚ à¤•à¥‹ à¤à¤ª à¤­à¥‡à¤œà¥‡à¤‚ (WhatsApp)</button>
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ CATALOG â”€â”€ */}
+      {screen==="catalog"&&(
+        <div>
+          <div style={S.hdr()}><div style={{fontSize:17,fontWeight:800}}>ðŸ›ï¸ à¤¸à¤¾à¤®à¤¾à¤¨ à¤šà¥à¤¨à¥‡à¤‚</div><div style={{fontSize:11,opacity:0.8}}>Photo à¤ªà¤° click â†’ à¤ªà¥‚à¤°à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€</div></div>
+          <div style={{padding:"12px 14px 0"}}>
+            <input style={S.inp} placeholder="ðŸ” à¤–à¥‹à¤œà¥‡à¤‚..." value={search} onChange={e=>setSearch(e.target.value)}/>
+            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:8,marginBottom:10}}>
+              {CATEGORIES.map(c=><button key={c} onClick={()=>setCat(c)} style={{background:cat===c?(c==="RCM"?C.rcm:C.green):C.white,color:cat===c?C.white:C.earth,border:`1.5px solid ${cat===c?(c==="RCM"?C.rcm:C.green):"#E0D8CE"}`,borderRadius:20,padding:"5px 12px",fontSize:12,fontWeight:cat===c?700:500,cursor:"pointer",whiteSpace:"nowrap",flexShrink:0}}>{c}</button>)}
+            </div>
+            {filtered.length===0&&<div style={{textAlign:"center",padding:"40px",color:C.gray}}>à¤•à¥‹à¤ˆ à¤¸à¤¾à¤®à¤¾à¤¨ à¤¨à¤¹à¥€à¤‚ à¤®à¤¿à¤²à¤¾</div>}
+            <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10}}>
+              {filtered.map(p=>(
+                <div key={p.id} style={{background:C.white,borderRadius:14,overflow:"hidden",boxShadow:"0 2px 10px rgba(0,0,0,0.07)",border:cart[p.id]?`2px solid ${C.green}`:"2px solid transparent",opacity:p.stock?1:0.6,cursor:"pointer"}} onClick={()=>setSelProd(p)}>
+                  <div style={{height:130,background:"#f8f8f8",position:"relative",overflow:"hidden",display:"flex",alignItems:"center",justifyContent:"center"}}>
+                    <ProdImg p={p} h={130}/>
+                    <div style={{position:"absolute",bottom:4,right:4,background:"rgba(0,0,0,0.35)",color:"#fff",borderRadius:12,padding:"2px 7px",fontSize:10}}>ðŸ”</div>
+                    <div style={{position:"absolute",top:6,left:6}}><span style={{...S.tag(!p.stock?"out-of-stock":p.tag),fontSize:9}}>{!p.stock?"à¤–à¤¤à¥à¤®":p.tag==="bestseller"?"â­":p.tag==="rcm"?"RCM":"âœ…"}</span></div>
+                  </div>
+                  <div style={{padding:"8px 10px 10px"}}>
+                    <div style={{fontSize:10,color:C.gray}}>{p.brand}</div>
+                    <div style={{fontSize:13,fontWeight:700,color:C.earth,lineHeight:1.3,marginBottom:2,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}}>{p.name}</div>
+                    <div style={{fontSize:10,color:C.gray,marginBottom:5}}>{p.unit}</div>
+                    <div style={{display:"flex",alignItems:"baseline",gap:4,marginBottom:8}}>
+                      <span style={{fontWeight:900,fontSize:15,color:p.category==="RCM"?C.rcm:C.green}}>â‚¹{p.price}</span>
+                      {p.mrp>p.price&&<span style={{fontSize:10,color:C.gray,textDecoration:"line-through"}}>â‚¹{p.mrp}</span>}
+                    </div>
+                    <div onClick={e=>e.stopPropagation()}>
+                      {cart[p.id]?(
+                        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",background:C.gp,borderRadius:8,padding:"4px 8px"}}>
+                          <button style={{...S.qBtn,width:24,height:24,fontSize:16}} onClick={()=>updQty(p.id,-1)}>âˆ’</button>
+                          <span style={{fontWeight:800,color:C.green,fontSize:14}}>{cart[p.id]}</span>
+                          <button style={{...S.qBtn,width:24,height:24,fontSize:16}} onClick={()=>updQty(p.id,1)}>+</button>
+                        </div>
+                      ):<button disabled={!p.stock} onClick={()=>addToCart(p)} style={{background:!p.stock?C.grayL:p.category==="RCM"?C.rcm:C.green,color:!p.stock?C.gray:C.white,border:"none",borderRadius:8,padding:"7px",fontSize:12,fontWeight:700,cursor:p.stock?"pointer":"not-allowed",width:"100%"}}>{!p.stock?"à¤–à¤¤à¥à¤®":"+ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚"}</button>}
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ CART â”€â”€ */}
+      {screen==="cart"&&(
+        <div>
+          <div style={S.hdr()}><div style={{fontSize:17,fontWeight:800}}>ðŸ›’ à¤•à¤¾à¤°à¥à¤Ÿ ({cartItems.length})</div></div>
+          <div style={{padding:"14px 14px 0"}}>
+            {cartItems.length===0?(
+              <div style={{textAlign:"center",padding:"60px 20px"}}><div style={{fontSize:56}}>ðŸ›’</div><div style={{fontSize:17,fontWeight:700,color:C.earth,marginTop:12}}>à¤•à¤¾à¤°à¥à¤Ÿ à¤–à¤¾à¤²à¥€ à¤¹à¥ˆ</div><div style={{height:16}}/><button style={S.btn("primary")} onClick={()=>setScreen("catalog")}>à¤¸à¤¾à¤®à¤¾à¤¨ à¤šà¥à¤¨à¥‡à¤‚</button></div>
+            ):(
+              <>
+                {cartItems.map(p=>(
+                  <div key={p.id} style={S.card}>
+                    <div style={{display:"flex",gap:10,alignItems:"center"}}>
+                      <div style={{width:58,height:58,borderRadius:10,overflow:"hidden",flexShrink:0}}><ProdImg p={p} w={58} h={58}/></div>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:700,fontSize:13,color:C.earth,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                        <div style={{fontSize:11,color:C.gray}}>{p.unit}</div>
+                        <div style={{fontWeight:800,color:C.green}}>â‚¹{p.price*cart[p.id]}</div>
+                      </div>
+                      <div style={{display:"flex",alignItems:"center",gap:5,background:C.gp,borderRadius:8,padding:"4px 6px"}}>
+                        <button style={{...S.qBtn,width:24,height:24,fontSize:15}} onClick={()=>updQty(p.id,-1)}>âˆ’</button>
+                        <input type="number" inputMode="numeric" value={cart[p.id]} onChange={e=>setQty(p.id,e.target.value)} style={{fontWeight:800,fontSize:14,color:C.green,width:42,textAlign:"center",border:`1px solid ${C.green}`,borderRadius:6,padding:"3px 0",background:C.white}}/>
+                        <button style={{...S.qBtn,width:24,height:24,fontSize:15}} onClick={()=>updQty(p.id,1)}>+</button>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+                <div style={{...S.card,border:`2px solid ${C.gp}`}}>
+                  <div style={{fontSize:14,fontWeight:800,color:C.earth,marginBottom:10}}>ðŸ“‹ à¤¬à¤¿à¤² à¤¸à¤¾à¤°à¤¾à¤‚à¤¶</div>
+                  {cartItems.map(p=><div key={p.id} style={{display:"flex",justifyContent:"space-between",fontSize:12,marginBottom:4,color:C.gray}}><span>{p.name.split(" ").slice(0,2).join(" ")} Ã—{cart[p.id]}</span><span>â‚¹{p.price*cart[p.id]}</span></div>)}
+                  <div style={{borderTop:"1.5px dashed #d0c8bc",margin:"10px 0"}}/>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:13,color:C.gray,marginBottom:4}}><span>ðŸšš à¤¡à¤¿à¤²à¥€à¤µà¤°à¥€ {shopDistance?`(${shopDistance} km)`:""}</span><span style={{color:getDeliveryFee(shopDistance,cartTotal)===0?C.green:C.earth,fontWeight:700}}>{getDeliveryFee(shopDistance,cartTotal)===0?"FREE ðŸŽ‰":`â‚¹${getDeliveryFee(shopDistance,cartTotal)}`}</span></div>
+                  <div style={{display:"flex",justifyContent:"space-between",fontSize:18,fontWeight:800,color:C.earth}}><span>à¤•à¥à¤²</span><span style={{color:C.green}}>â‚¹{cartTotal+getDeliveryFee(shopDistance,cartTotal)}</span></div>
+                </div>
+                {!shopDistance&&<div style={{background:C.sl,borderRadius:10,padding:"10px 12px",marginBottom:10,fontSize:13,color:C.earth}}>ðŸ’¡ à¤¦à¥à¤•à¤¾à¤¨ à¤•à¥€ à¤¦à¥‚à¤°à¥€ à¤¸à¥‡à¤Ÿ à¤•à¤°à¥‡à¤‚ â€” ðŸª à¤¬à¤Ÿà¤¨ à¤¦à¤¬à¤¾à¤•à¤° GPS à¤¸à¥‡ à¤ªà¤¤à¤¾ à¤•à¤°à¥‡à¤‚à¥¤ à¤‰à¤¸à¤•à¥‡ à¤¹à¤¿à¤¸à¤¾à¤¬ à¤¸à¥‡ à¤¡à¤¿à¤²à¥€à¤µà¤°à¥€ à¤šà¤¾à¤°à¥à¤œ à¤²à¤—à¥‡à¤—à¤¾à¥¤</div>}
+                {cartTotal<FREE_DELIVERY_ABOVE&&<div style={{background:C.gp,borderRadius:10,padding:"10px 12px",marginBottom:10,fontSize:13,color:C.green}}>ðŸŽ‰ â‚¹{FREE_DELIVERY_ABOVE-cartTotal} à¤”à¤° à¤œà¥‹à¤¡à¤¼à¥‡à¤‚ â†’ à¤¡à¤¿à¤²à¥€à¤µà¤°à¥€ FREE à¤¹à¥‹ à¤œà¤¾à¤à¤—à¥€!</div>}
+                {cartTotal<MIN_ORDER_VALUE?(
+                  <div style={{background:"#FEE2E2",border:`1.5px solid ${C.red}`,borderRadius:10,padding:"12px",marginBottom:10,textAlign:"center"}}>
+                    <div style={{fontSize:13,fontWeight:700,color:C.red,marginBottom:4}}>âš ï¸ à¤¨à¥à¤¯à¥‚à¤¨à¤¤à¤® à¤‘à¤°à¥à¤¡à¤° â‚¹{MIN_ORDER_VALUE} à¤¹à¥‹à¤¨à¤¾ à¤šà¤¾à¤¹à¤¿à¤</div>
+                    <div style={{fontSize:12,color:C.earth}}>à¤…à¤­à¥€ â‚¹{MIN_ORDER_VALUE-cartTotal} à¤”à¤° à¤¸à¤¾à¤®à¤¾à¤¨ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚</div>
+                  </div>
+                ):null}
+                <button style={{...S.btn("primary"),marginBottom:6,fontSize:16,opacity:cartTotal<MIN_ORDER_VALUE?0.5:1,cursor:cartTotal<MIN_ORDER_VALUE?"not-allowed":"pointer"}} disabled={cartTotal<MIN_ORDER_VALUE} onClick={()=>{ if(!shopPhone||!shopAddr||!shopDistance){setShowShop(true);return;} setShowPayment(true); }}>ðŸ’³ à¤†à¤—à¥‡ à¤¬à¤¢à¤¼à¥‡à¤‚ â€” Payment à¤šà¥à¤¨à¥‡à¤‚</button>
+                <div style={{fontSize:11,color:C.gray,textAlign:"center",marginBottom:8}}>COD à¤¯à¤¾ UPI à¤¸à¥‡ à¤‘à¤°à¥à¤¡à¤° à¤•à¤¨à¥à¤«à¤°à¥à¤® à¤•à¤°à¥‡à¤‚</div>
+                <button style={S.btn("gray")} onClick={()=>setScreen("catalog")}>+ à¤”à¤° à¤¸à¤¾à¤®à¤¾à¤¨ à¤œà¥‹à¤¡à¤¼à¥‡à¤‚</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ ORDERS â”€â”€ */}
+      {screen==="orders"&&(
+        <div>
+          <div style={S.hdr()}><div style={{fontSize:17,fontWeight:800}}>ðŸ“¦ à¤®à¥‡à¤°à¥‡ à¤‘à¤°à¥à¤¡à¤°</div><div style={{fontSize:11,opacity:0.8}}>Delivered à¤‘à¤°à¥à¤¡à¤° à¤…à¤ªà¤¨à¥‡ à¤†à¤ª à¤¹à¤Ÿ à¤œà¤¾à¤¤à¥‡ à¤¹à¥ˆà¤‚</div></div>
+          <div style={{padding:"14px 14px 0"}}>
+            {(() => {
+              const myOrders = orders.filter(o=>(!shopPhone||o.phone===shopPhone) && o.status!=="delivered");
+              if(myOrders.length===0) return (
+                <div style={{textAlign:"center",padding:"60px 20px"}}>
+                  <div style={{fontSize:56}}>âœ…</div>
+                  <div style={{fontSize:17,fontWeight:700,color:C.earth,marginTop:12}}>à¤¸à¤­à¥€ à¤‘à¤°à¥à¤¡à¤° à¤¡à¤¿à¤²à¥€à¤µà¤° à¤¹à¥‹ à¤—à¤!</div>
+                  <div style={{fontSize:13,color:C.gray,marginTop:8}}>à¤¨à¤¯à¤¾ à¤‘à¤°à¥à¤¡à¤° à¤¦à¥‡à¤¨à¥‡ à¤•à¥‡ à¤²à¤¿à¤ à¤¨à¥€à¤šà¥‡ à¤¬à¤Ÿà¤¨ à¤¦à¤¬à¤¾à¤à¤‚</div>                    </select>
+                    <input type="number" inputMode="numeric" style={S.inp} placeholder="à¤¸à¥à¤Ÿà¥‰à¤• à¤®à¤¾à¤¤à¥à¤°à¤¾ (à¤–à¤¾à¤²à¥€ à¤›à¥‹à¤¡à¤¼à¥‹ à¤…à¤—à¤° track à¤¨à¤¹à¥€à¤‚ à¤•à¤°à¤¨à¤¾)" value={newF.stockQty||""} onChange={e=>setNewF(f=>({...f,stockQty:e.target.value}))}/>
+                    <input ref={addRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleImg(e,"add",0)}/>
+                    <input ref={addRef2} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleImg(e,"add",1)}/>
+                    <input ref={addRef3} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleImg(e,"add",2)}/>
+                    <div style={{fontSize:12,color:C.earth,fontWeight:700,marginBottom:6}}>ðŸ“· 3 à¤«à¥‹à¤Ÿà¥‹ à¤…à¤ªà¤²à¥‹à¤¡ à¤•à¤°à¥‡à¤‚ (à¤†à¤—à¥‡, à¤ªà¥€à¤›à¥‡, à¤¡à¤¿à¤Ÿà¥‡à¤²)</div>
+                    <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                      {[addRef,addRef2,addRef3].map((ref,i)=>{
+                        const img=(newF.imgs||[])[i];
+                        return (
+                          <div key={i} onClick={()=>ref.current.click()} style={{height:80,borderRadius:8,border:`2px dashed ${img?C.green:"#ccc"}`,overflow:"hidden",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:img?"#f8f8f8":C.grayL,position:"relative"}}>
+                            {img?<img src={img} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<div style={{textAlign:"center",fontSize:11,color:C.gray}}>ðŸ“·<br/>à¤«à¥‹à¤Ÿà¥‹ {i+1}</div>}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    <button style={S.btn("orange")} onClick={addProd}>âœ… à¤œà¥‹à¤¡à¤¼à¥‡à¤‚</button>
+                  </div>
+                )}
+                <div style={{fontSize:14,fontWeight:800,color:C.earth,marginBottom:10}}>à¤¸à¤­à¥€ {products.length} à¤¸à¤¾à¤®à¤¾à¤¨</div>
+                {products.map(p=>(
+                  <div key={p.id} style={{...S.card,border:editProd?.id===p.id?`2px solid ${C.saffron}`:"2px solid transparent",opacity:p.stock?1:0.6}}>
+                    {editProd?.id===p.id?(
+                      <div>
+                        <div style={{fontSize:13,fontWeight:700,color:C.earth,marginBottom:8}}>âœï¸ {p.name}</div>
+                        {[["à¤¨à¤¾à¤®","name"],["à¤¬à¥à¤°à¤¾à¤‚à¤¡","brand"],["Unit","unit"],["à¤¥à¥‹à¤• â‚¹","price"],["MRP â‚¹","mrp"],["à¤µà¤¿à¤µà¤°à¤£","desc"],["Image URL","img"]].map(([ph,key])=>(
+                          <input key={key} style={S.inp} placeholder={ph} value={editProd[key]||""} onChange={e=>setEditProd(ep=>({...ep,[key]:e.target.value}))}/>
+                        ))}
+                        <input type="number" inputMode="numeric" style={S.inp} placeholder="à¤¸à¥à¤Ÿà¥‰à¤• à¤®à¤¾à¤¤à¥à¤°à¤¾ (à¤–à¤¾à¤²à¥€ à¤›à¥‹à¤¡à¤¼à¥‹ à¤…à¤—à¤° track à¤¨à¤¹à¥€à¤‚ à¤•à¤°à¤¨à¤¾)" value={editProd.stockQty??""} onChange={e=>setEditProd(ep=>({...ep,stockQty:e.target.value===""?"":Number(e.target.value)}))}/>
+                        <div style={{fontSize:11,color:C.gray,marginBottom:8}}>à¤¸à¥à¤Ÿà¥‰à¤• à¤®à¤¾à¤¤à¥à¤°à¤¾ {LOW_STOCK_THRESHOLD} à¤¯à¤¾ à¤‰à¤¸à¤¸à¥‡ à¤•à¤® à¤¹à¥‹à¤¨à¥‡ à¤ªà¤° Sales Dashboard à¤®à¥‡à¤‚ à¤…à¤²à¤°à¥à¤Ÿ à¤¦à¤¿à¤–à¥‡à¤—à¤¾</div>
+                        <input ref={editRef} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleImg(e,"edit",0)}/>
+                        <input ref={editRef2} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleImg(e,"edit",1)}/>
+                        <input ref={editRef3} type="file" accept="image/*" style={{display:"none"}} onChange={e=>handleImg(e,"edit",2)}/>
+                        <div style={{fontSize:12,color:C.earth,fontWeight:700,marginBottom:6}}>ðŸ“· 3 à¤«à¥‹à¤Ÿà¥‹ (à¤†à¤—à¥‡, à¤ªà¥€à¤›à¥‡, à¤¡à¤¿à¤Ÿà¥‡à¤²) â€” tap à¤•à¤°à¤•à¥‡ à¤¬à¤¦à¤²à¥‡à¤‚</div>
+                        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:8}}>
+                          {[editRef,editRef2,editRef3].map((ref,i)=>{
+                            const existImgs = editProd.imgs&&editProd.imgs.length>0?editProd.imgs:[editProd.img||null,null,null];
+                            const img=existImgs[i];
+                            return (
+                              <div key={i} onClick={()=>ref.current.click()} style={{height:80,borderRadius:8,border:`2px dashed ${img?C.green:"#ccc"}`,overflow:"hidden",cursor:"pointer",display:"flex",alignItems:"center",justifyContent:"center",background:img?"#f8f8f8":C.grayL}}>
+                                {img?<img src={img} alt="" style={{width:"100%",height:"100%",objectFit:"contain"}}/>:<div style={{textAlign:"center",fontSize:11,color:C.gray}}>ðŸ“·<br/>à¤«à¥‹à¤Ÿà¥‹ {i+1}</div>}
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{display:"flex",gap:8}}>
+                          <button style={{...S.btn("primary"),flex:1}} onClick={saveEdit}>ðŸ’¾ à¤¸à¥‡à¤µ à¤•à¤°à¥‡à¤‚</button>
+                          <button style={{...S.btn("gray"),flex:1}} onClick={()=>setEditProd(null)}>à¤°à¤¦à¥à¤¦</button>
+                        </div>
+                      </div>
+                    ):(
+                      <div style={{display:"flex",alignItems:"center",gap:10}}>
+                        <div style={{width:50,height:50,borderRadius:8,overflow:"hidden",flexShrink:0}}><ProdImg p={p} w={50} h={50}/></div>
+                        <div style={{flex:1,minWidth:0}}>
+                          <div style={{fontWeight:700,fontSize:12,color:C.earth,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.name}</div>
+                          <div style={{fontSize:11,color:C.gray}}>â‚¹{p.price} / MRP â‚¹{p.mrp}</div>
+                          <div style={{fontSize:10,color:p.stock?C.green:C.red,fontWeight:600}}>{p.stock?"âœ… à¤‰à¤ªà¤²à¤¬à¥à¤§":"âŒ à¤–à¤¤à¥à¤®"}</div>
+                        </div>
+                        <div style={{display:"flex",flexDirection:"column",gap:4,flexShrink:0}}>
+                          <button style={{background:p.stock?"#FEE2E2":C.gp,color:p.stock?C.red:C.green,border:"none",borderRadius:8,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}} onClick={()=>{togStock(p.id,p.stock);toast(p.stock?"âŒ à¤–à¤¤à¥à¤® à¤•à¤¿à¤¯à¤¾":"âœ… Stock à¤®à¥‡à¤‚");}}>{p.stock?"à¤–à¤¤à¥à¤®":"Stock"}</button>
+                          <button style={{background:"#FFF3E0",color:C.saffron,border:"none",borderRadius:8,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}} onClick={()=>setEditProd({...p})}>âœï¸ Edit</button>
+                          <button style={{background:"#FEE2E2",color:C.red,border:"none",borderRadius:8,padding:"4px 8px",fontSize:10,fontWeight:700,cursor:"pointer"}} onClick={()=>delProd(p.id)}>ðŸ—‘ï¸ Del</button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* â”€â”€ MODALS â”€â”€ */}
+      <Modal show={showShop} onClose={()=>setShowShop(false)} title="ðŸª à¤¦à¥à¤•à¤¾à¤¨ à¤•à¥€ à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€">
+        <input style={S.inp} placeholder="à¤¦à¥à¤•à¤¾à¤¨ à¤•à¤¾ à¤¨à¤¾à¤®" value={shopName} onChange={e=>setShopName(e.target.value)}/>
+        <input style={S.inp} placeholder="ðŸ“ž à¤®à¥‹à¤¬à¤¾à¤‡à¤² à¤¨à¤‚à¤¬à¤° (à¤œà¤°à¥‚à¤°à¥€)" type="tel" inputMode="numeric" value={shopPhone} onChange={e=>setShopPhone(e.target.value)}/>
+        <input style={S.inp} placeholder="ðŸ“ à¤ªà¤¤à¤¾ / à¤—à¤¾à¤‚à¤µ à¤•à¤¾ à¤¨à¤¾à¤® (à¤œà¤°à¥‚à¤°à¥€)" value={shopAddr} onChange={e=>setShopAddr(e.target.value)}/>
+        <button style={{...S.btn(locating?"gray":"wa"),marginBottom:8,fontSize:13}} onClick={detectDistance} disabled={locating}>{locating?"ðŸ“ à¤²à¥‹à¤•à¥‡à¤¶à¤¨ à¤ªà¤¤à¤¾ à¤•à¥€ à¤œà¤¾ à¤°à¤¹à¥€ à¤¹à¥ˆ...":"ðŸ“ GPS à¤¸à¥‡ à¤¦à¥‚à¤°à¥€ à¤…à¤ªà¤¨à¥‡ à¤†à¤ª à¤ªà¤¤à¤¾ à¤•à¤°à¥‡à¤‚"}</button>
+        <input style={{...S.inp,marginBottom:4}} placeholder="ðŸ“ à¤¦à¥à¤•à¤¾à¤¨ à¤•à¥€ à¤¦à¥‚à¤°à¥€ â€” km à¤®à¥‡à¤‚ (à¤œà¤°à¥‚à¤°à¥€)" type="tel" inputMode="decimal" value={shopDistance} onChange={e=>setShopDistance(e.target.value)}/>
+        <div style={{fontSize:11,color:C.gray,marginBottom:14}}>à¤¡à¤¿à¤²à¥€à¤µà¤°à¥€ à¤šà¤¾à¤°à¥à¤œ: 1-5km â‚¹15 â€¢ 5-20km â‚¹40 â€¢ 20km+ â‚¹50 â€¢ â‚¹{FREE_DELIVERY_ABOVE}+ à¤‘à¤°à¥à¤¡à¤° à¤ªà¤° FREE ðŸŽ‰</div>
+        <button style={S.btn("primary")} onClick={()=>{ if(shopPhone&&shopAddr&&shopDistance){localStorage.setItem("gb_shop_name",shopName);localStorage.setItem("gb_shop_phone",shopPhone);localStorage.setItem("gb_shop_addr",shopAddr);localStorage.setItem("gb_shop_distance",shopDistance);setShowShop(false);toast("âœ… à¤œà¤¾à¤¨à¤•à¤¾à¤°à¥€ à¤¸à¥‡à¤µ");} else toast("à¤«à¥‹à¤¨, à¤ªà¤¤à¤¾ à¤”à¤° à¤¦à¥‚à¤°à¥€ à¤œà¤°à¥‚à¤°à¥€ à¤¹à¥ˆ",C.red);}}>à¤¸à¥‡à¤µ à¤•à¤°à¥‡à¤‚</button>
+      </Modal>
+
+      <Modal show={showPin} onClose={()=>{setShowPin(false);setAdminPin("");}} title="ðŸ” Admin PIN">
+        <div style={{fontSize:12,color:C.gray,marginBottom:12}}>à¤¸à¤¿à¤°à¥à¤« à¤®à¤¾à¤²à¤¿à¤• à¤•à¥‡ à¤²à¤¿à¤</div>
+        <input style={S.inp} type="password" placeholder="PIN à¤¡à¤¾à¤²à¥‡à¤‚" value={adminPin} onChange={e=>setAdminPin(e.target.value)}/>
+        <button style={S.btn("primary")} onClick={()=>{ if(adminPin===ADMIN_PIN){setAdminMode(true);setShowPin(false);setScreen("admin");setAdminPin("");toast("âœ… Admin Panel à¤–à¥à¤² à¤—à¤¯à¤¾");} else toast("âŒ à¤—à¤²à¤¤ PIN",C.red);}}>Enter à¤•à¤°à¥‡à¤‚</button>
+      </Modal>
+
+      {/* â”€â”€ NAVBAR â”€â”€ */}
+      <div style={S.nb}>
+        {[
+          {id:"home",ic:"ðŸ ",lb:"à¤¹à¥‹à¤®"},
+          {id:"catalog",ic:"ðŸ›ï¸",lb:"à¤¸à¤¾à¤®à¤¾à¤¨"},
+          {id:"cart",ic:"ðŸ›’",lb:"à¤•à¤¾à¤°à¥à¤Ÿ",badge:cartCount},
+          {id:"orders",ic:"ðŸ“¦",lb:"à¤‘à¤°à¥à¤¡à¤°"},
+          ...(adminMode?[{id:"admin",ic:"ðŸ”",lb:"Admin"}]:[]),
+        ].map(n=>(
+          <button key={n.id} style={S.nbBtn(screen===n.id)} onClick={()=>setScreen(n.id)}>
+            <div style={{position:"relative",display:"inline-block"}}>
+              <span style={{fontSize:20}}>{n.ic}</span>
+              {n.badge>0&&<span style={{position:"absolute",top:-4,right:-8,background:C.red,color:C.white,borderRadius:"50%",width:16,height:16,fontSize:9,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center"}}>{n.badge}</span>}
+            </div>
+            <span>{n.lb}</span>
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.createRoot(document.getElementById("root")).render(<App/>);
+</script>
+</body>
+</html>
